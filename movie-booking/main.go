@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 type Movie struct {
 	movieName string
@@ -22,9 +25,12 @@ type Show struct {
 	endTime     int
 	screen      *Screen
 	bookedSeats map[int]bool
+	mu          sync.Mutex
 }
 
 func (s *Show) BookSeat(seatNumber int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	_, exists := s.screen.seats[seatNumber]
 	if !exists {
 		return fmt.Errorf("seat %d does not exist", seatNumber)
@@ -54,10 +60,12 @@ type Theatre struct {
 	location string
 	screen   map[int]*Screen
 	shows    []*Show
+	mu       sync.Mutex
 }
 
 func (th *Theatre) addShow(movie Movie, screenNo int, startTime int, endTime int) error {
-
+	th.mu.Lock()
+	defer th.mu.Unlock()
 	// Check all shows
 	for _, show := range th.shows {
 
@@ -90,15 +98,20 @@ func (th *Theatre) addShow(movie Movie, screenNo int, startTime int, endTime int
 	return nil
 }
 func (th *Theatre) getShows() []*Show {
+	th.mu.Lock()
+	defer th.mu.Unlock()
 	return th.shows
 }
 
 type MovieBookingSystem struct {
 	theatres      map[int]*Theatre
 	nextTheatreId int
+	mu            sync.Mutex
 }
 
 func (ms *MovieBookingSystem) addTheatre(name string, location string, screenCount int) *Theatre {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
 
 	screens := make(map[int]*Screen)
 
@@ -166,6 +179,24 @@ func main() {
 		if err := shows[1].BookSeat(2); err != nil {
 			fmt.Println(err)
 		}
+
+		//booking parallely
+
+		var wg sync.WaitGroup
+
+		for i := 0; i < 2; i++ {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+
+				if err := shows[1].BookSeat(3); err != nil {
+					fmt.Println(err)
+				}
+			}()
+		}
+
+		wg.Wait()
 
 	}
 
